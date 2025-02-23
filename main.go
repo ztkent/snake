@@ -15,6 +15,7 @@ const (
 	StateGame
 	StateSettings
 	StateGameOver
+	StatePaused
 )
 
 // Sprite represents a falling pixel element in the background
@@ -49,7 +50,7 @@ type MenuState struct {
 	turnPoints     []TurnPoint
 	font           rl.Font
 	buttonReleased bool
-	screenWidth    int32 // Add screen dimensions
+	screenWidth    int32
 	screenHeight   int32
 }
 
@@ -61,7 +62,7 @@ type Game struct {
 	screenHeight int32
 	running      bool
 	menu         *MenuState
-	score        Score // Add this field
+	score        Score
 }
 
 type Score struct {
@@ -169,7 +170,7 @@ func (m *MenuState) handleButtonClick() bool {
 
 // Run is the main game loop
 func (g *Game) Run() {
-	for g.running {
+	for g.running && !rl.WindowShouldClose() {
 		switch g.state {
 		case StateMainMenu:
 			g.running = g.openMainMenu()
@@ -188,7 +189,7 @@ type Button struct {
 	text     string
 	fontSize int32
 	color    rl.Color
-	font     rl.Font // Add font field
+	font     rl.Font
 }
 
 func NewButton(x, y, width, height float32, text string, fontSize int32, font rl.Font) Button {
@@ -269,7 +270,7 @@ func (g *Game) openMainMenu() bool {
 		g.menu.font,
 	)
 
-	// Add title configuration
+	// Title configuration
 	titleText := "SNAKE!"
 	titleFontSize := float32(80)
 	titleSize := rl.MeasureTextEx(g.menu.font, titleText, titleFontSize, 1)
@@ -578,8 +579,26 @@ func (g *Game) StartGame() {
 	g.spawnFood(&food, snake.segments)
 
 	lastUpdateTime := float32(0)
+	pauseStartTime := float32(0)
+	totalPauseTime := float32(0)
 
-	for !rl.WindowShouldClose() {
+	for {
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			g.state = StatePaused
+			pauseStartTime = float32(rl.GetTime())
+			if !g.openPauseScreen() {
+				return // Exit to main menu if openPauseScreen returns false
+			}
+			// Calculate pause duration and adjust times
+			totalPauseTime += float32(rl.GetTime()) - pauseStartTime
+			lastUpdateTime = float32(rl.GetTime())
+			continue
+		} else if rl.WindowShouldClose() {
+			g.state = StateMainMenu
+			g.running = false
+			return
+		}
+
 		// Handle input
 		if rl.IsKeyPressed(rl.KeyUp) && snake.direction.Y != 1 {
 			snake.direction = Direction{X: 0, Y: -1}
@@ -628,8 +647,8 @@ func (g *Game) StartGame() {
 			lastUpdateTime = float32(currentTime)
 		}
 
-		// Update duration
-		g.score.duration = float32(rl.GetTime()) - g.score.startTime
+		// Update duration (subtracting total pause time)
+		g.score.duration = float32(rl.GetTime()) - g.score.startTime - totalPauseTime
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.DarkGray)
@@ -674,6 +693,124 @@ func (g *Game) StartGame() {
 		g.drawSnake(snake)
 
 		rl.EndDrawing()
+	}
+}
+
+// Display a pause screen with resume and quit buttons
+func (g *Game) openPauseScreen() bool {
+	buttonWidth := float32(200)
+	buttonHeight := float32(50)
+	buttonSpacing := float32(20)
+
+	// Create buttons
+	resumeButton := NewButton(
+		float32(g.screenWidth)/2-buttonWidth/2,
+		float32(g.screenHeight)*0.6,
+		buttonWidth,
+		buttonHeight,
+		"Resume",
+		30,
+		g.menu.font,
+	)
+
+	quitButton := NewButton(
+		float32(g.screenWidth)/2-buttonWidth/2,
+		float32(g.screenHeight)*0.6+buttonHeight+buttonSpacing,
+		buttonWidth,
+		buttonHeight,
+		"Quit to Menu",
+		30,
+		g.menu.font,
+	)
+
+	// Text configuration
+	pauseText := "PAUSED"
+	titleFontSize := float32(60)
+	statsFontSize := float32(30)
+	titleSize := rl.MeasureTextEx(g.menu.font, pauseText, titleFontSize, 1)
+
+	for {
+		mousePoint := rl.GetMousePosition()
+
+		// Handle button states
+		if resumeButton.IsHovered(mousePoint) {
+			resumeButton.color = rl.Gray
+			if g.menu.handleButtonClick() {
+				g.state = StateGame
+				return true
+			}
+		} else {
+			resumeButton.color = rl.LightGray
+		}
+
+		if quitButton.IsHovered(mousePoint) {
+			quitButton.color = rl.Gray
+			if g.menu.handleButtonClick() {
+				g.state = StateMainMenu
+				return false
+			}
+		} else {
+			quitButton.color = rl.LightGray
+		}
+
+		rl.BeginDrawing()
+		// Draw semi-transparent overlay
+		rl.DrawRectangle(0, 0, g.screenWidth, g.screenHeight, rl.Color{R: 0, G: 0, B: 0, A: 120})
+
+		// Draw pause text
+		rl.DrawTextEx(
+			g.menu.font,
+			pauseText,
+			rl.Vector2{
+				X: float32(g.screenWidth)/2 - titleSize.X/2,
+				Y: float32(g.screenHeight) * 0.2,
+			},
+			titleFontSize,
+			1,
+			rl.White,
+		)
+
+		// Draw score
+		scoreText := fmt.Sprintf("Score: %d", g.score.points)
+		timeText := fmt.Sprintf("Time: %.1fs", g.score.duration)
+
+		scoreSize := rl.MeasureTextEx(g.menu.font, scoreText, statsFontSize, 1)
+		rl.DrawTextEx(
+			g.menu.font,
+			scoreText,
+			rl.Vector2{
+				X: float32(g.screenWidth)/2 - scoreSize.X/2,
+				Y: float32(g.screenHeight) * 0.4,
+			},
+			statsFontSize,
+			1,
+			rl.Green,
+		)
+
+		// Draw time
+		timeSize := rl.MeasureTextEx(g.menu.font, timeText, statsFontSize, 1)
+		rl.DrawTextEx(
+			g.menu.font,
+			timeText,
+			rl.Vector2{
+				X: float32(g.screenWidth)/2 - timeSize.X/2,
+				Y: float32(g.screenHeight)*0.4 + scoreSize.Y + buttonSpacing/2,
+			},
+			statsFontSize,
+			1,
+			rl.Green,
+		)
+
+		// Draw buttons
+		resumeButton.Draw()
+		quitButton.Draw()
+
+		rl.EndDrawing()
+
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			g.state = StateGame
+			return true
+		}
 	}
 }
 
@@ -753,7 +890,7 @@ func (g *Game) spawnFood(food *Food, snakeSegments []rl.Vector2) {
 	}
 }
 
-// Add the new openGameOverScreen method
+// Game over screen, displays final score and time
 func (g *Game) openGameOverScreen() {
 	buttonWidth := float32(240)
 	buttonHeight := float32(50)
