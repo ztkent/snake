@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -16,6 +17,7 @@ const (
 	StateSettings
 	StateGameOver
 	StatePaused
+	StateHighScores // Add new state
 )
 
 // Sprite represents a falling pixel element in the background
@@ -63,6 +65,7 @@ type Game struct {
 	running      bool
 	menu         *MenuState
 	score        Score
+	highScores   []HighScore
 }
 
 type Score struct {
@@ -105,6 +108,11 @@ func NewGame(screenWidth, screenHeight int32) *Game {
 
 	menu.font = rl.LoadFont("assets/RetroGaming.ttf")
 
+	scores, err := LoadHighScores()
+	if err != nil {
+		scores = make([]HighScore, 0)
+	}
+
 	return &Game{
 		state:        StateMainMenu,
 		volume:       100,
@@ -112,6 +120,7 @@ func NewGame(screenWidth, screenHeight int32) *Game {
 		screenHeight: screenHeight,
 		running:      true,
 		menu:         menu,
+		highScores:   scores,
 	}
 }
 
@@ -180,6 +189,8 @@ func (g *Game) Run() {
 			g.StartGame()
 		case StateGameOver:
 			g.openGameOverScreen()
+		case StateHighScores:
+			g.openHighScoresScreen()
 		}
 	}
 }
@@ -240,7 +251,7 @@ func (g *Game) openMainMenu() bool {
 	buttonWidth := float32(200)
 	buttonHeight := float32(50)
 	buttonSpacing := float32(20)
-	startY := float32(g.screenHeight)/2 - (buttonHeight*3+buttonSpacing*2)/2
+	startY := float32(g.screenHeight)/2 - (buttonHeight*4+buttonSpacing*3)/2 // Adjusted for new button
 
 	startButton := NewButton(
 		float32(g.screenWidth)/2-buttonWidth/2,
@@ -251,18 +262,30 @@ func (g *Game) openMainMenu() bool {
 		30,
 		g.menu.font,
 	)
-	settingsButton := NewButton(
+
+	highScoresButton := NewButton(
 		float32(g.screenWidth)/2-buttonWidth/2,
 		startY+buttonHeight+buttonSpacing,
+		buttonWidth,
+		buttonHeight,
+		"High Scores",
+		30,
+		g.menu.font,
+	)
+
+	settingsButton := NewButton(
+		float32(g.screenWidth)/2-buttonWidth/2,
+		startY+2*(buttonHeight+buttonSpacing),
 		buttonWidth,
 		buttonHeight,
 		"Settings",
 		30,
 		g.menu.font,
 	)
+
 	exitButton := NewButton(
 		float32(g.screenWidth)/2-buttonWidth/2,
-		startY+2*(buttonHeight+buttonSpacing),
+		startY+3*(buttonHeight+buttonSpacing),
 		buttonWidth,
 		buttonHeight,
 		"Exit",
@@ -291,6 +314,16 @@ func (g *Game) openMainMenu() bool {
 			}
 		} else {
 			startButton.color = rl.LightGray
+		}
+
+		if highScoresButton.IsHovered(mousePoint) {
+			highScoresButton.color = rl.Gray
+			if g.menu.handleButtonClick() {
+				g.state = StateHighScores
+				return true
+			}
+		} else {
+			highScoresButton.color = rl.LightGray
 		}
 
 		if settingsButton.IsHovered(mousePoint) {
@@ -332,6 +365,7 @@ func (g *Game) openMainMenu() bool {
 		)
 
 		startButton.Draw()
+		highScoresButton.Draw()
 		settingsButton.Draw()
 		exitButton.Draw()
 
@@ -450,6 +484,12 @@ func min(a, b float64) float64 {
 	}
 	return b
 }
+func minInt32(a, b int32) int32 {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 func max(a, b float64) float64 {
 	if a > b {
@@ -531,168 +571,6 @@ func (m *MenuState) drawSnake() {
 		// Draw eyes on left side when moving left
 		rl.DrawRectangleV(m.snakePos, rl.Vector2{X: m.snakeSize, Y: m.snakeSize}, headColor)
 		rl.DrawCircleV(rl.Vector2{X: m.snakePos.X + m.snakeSize*0.3, Y: m.snakePos.Y + m.snakeSize*0.3}, 2, rl.White)
-	}
-}
-
-const (
-	gridSize     = 20  // Size of each grid cell
-	initialSpeed = 200 // Pixels per second
-)
-
-type Direction struct {
-	X float32
-	Y float32
-}
-
-type GameSnake struct {
-	segments  []rl.Vector2
-	direction Direction
-	speed     float32
-	size      float32
-}
-
-type Food struct {
-	position rl.Vector2
-	size     float32
-}
-
-func (g *Game) StartGame() {
-	// Initialize score
-	g.score = Score{
-		points:    0,
-		startTime: float32(rl.GetTime()),
-		duration:  0,
-	}
-
-	// Initialize snake in the middle of the screen
-	snake := GameSnake{
-		segments: []rl.Vector2{
-			{X: float32(g.screenWidth / 2), Y: float32(g.screenHeight / 2)},
-			{X: float32(g.screenWidth/2) - gridSize, Y: float32(g.screenHeight / 2)},
-		},
-		direction: Direction{X: 1, Y: 0},
-		speed:     initialSpeed,
-		size:      gridSize,
-	}
-
-	food := Food{size: gridSize}
-	g.spawnFood(&food, snake.segments)
-
-	lastUpdateTime := float32(0)
-	pauseStartTime := float32(0)
-	totalPauseTime := float32(0)
-
-	for {
-		if rl.IsKeyPressed(rl.KeyEscape) {
-			g.state = StatePaused
-			pauseStartTime = float32(rl.GetTime())
-			if !g.openPauseScreen() {
-				return // Exit to main menu if openPauseScreen returns false
-			}
-			// Calculate pause duration and adjust times
-			totalPauseTime += float32(rl.GetTime()) - pauseStartTime
-			lastUpdateTime = float32(rl.GetTime())
-			continue
-		} else if rl.WindowShouldClose() {
-			g.state = StateMainMenu
-			g.running = false
-			return
-		}
-
-		// Handle input
-		if rl.IsKeyPressed(rl.KeyUp) && snake.direction.Y != 1 {
-			snake.direction = Direction{X: 0, Y: -1}
-		}
-		if rl.IsKeyPressed(rl.KeyDown) && snake.direction.Y != -1 {
-			snake.direction = Direction{X: 0, Y: 1}
-		}
-		if rl.IsKeyPressed(rl.KeyLeft) && snake.direction.X != 1 {
-			snake.direction = Direction{X: -1, Y: 0}
-		}
-		if rl.IsKeyPressed(rl.KeyRight) && snake.direction.X != -1 {
-			snake.direction = Direction{X: 1, Y: 0}
-		}
-
-		currentTime := rl.GetTime()
-		deltaTime := float32(currentTime) - lastUpdateTime
-
-		if deltaTime >= 1.0/15.0 {
-			// Update snake position
-			newHead := rl.Vector2{
-				X: snake.segments[0].X + snake.direction.X*snake.size,
-				Y: snake.segments[0].Y + snake.direction.Y*snake.size,
-			}
-
-			// Handle screen wrapping
-			newHead = g.wrapPosition(newHead, snake.size)
-
-			// Check self-collision
-			if g.checkSelfCollision(newHead, snake.segments) {
-				g.state = StateGameOver
-				return
-			}
-
-			// Check food collision
-			if g.checkFoodCollision(newHead, snake.size, food) {
-				// Increment score
-				g.score.points++
-				// Grow snake
-				snake.segments = append([]rl.Vector2{newHead}, snake.segments...)
-				g.spawnFood(&food, snake.segments)
-			} else {
-				// Move snake
-				snake.segments = append([]rl.Vector2{newHead}, snake.segments[:len(snake.segments)-1]...)
-			}
-
-			lastUpdateTime = float32(currentTime)
-		}
-
-		// Update duration (subtracting total pause time)
-		g.score.duration = float32(rl.GetTime()) - g.score.startTime - totalPauseTime
-
-		rl.BeginDrawing()
-		rl.ClearBackground(rl.DarkGray)
-
-		// Draw score
-		scoreText := fmt.Sprintf("Score: %d", g.score.points)
-		durationText := fmt.Sprintf("Time: %.1fs", g.score.duration)
-		fontSize := float32(20)
-
-		// Draw score
-		scoreSize := rl.MeasureTextEx(g.menu.font, scoreText, fontSize, 1)
-		rl.DrawTextEx(
-			g.menu.font,
-			scoreText,
-			rl.Vector2{
-				X: float32(g.screenWidth) - scoreSize.X - 10,
-				Y: 10,
-			},
-			fontSize,
-			1,
-			rl.White,
-		)
-
-		// Draw duration below score
-		durationSize := rl.MeasureTextEx(g.menu.font, durationText, fontSize, 1)
-		rl.DrawTextEx(
-			g.menu.font,
-			durationText,
-			rl.Vector2{
-				X: float32(g.screenWidth) - durationSize.X - 10,
-				Y: scoreSize.Y + 15,
-			},
-			fontSize,
-			1,
-			rl.White,
-		)
-
-		// Draw food
-		rl.DrawRectangleV(food.position, rl.Vector2{X: food.size, Y: food.size}, rl.Red)
-
-		// Draw snake
-		g.drawSnake(snake)
-
-		rl.EndDrawing()
 	}
 }
 
@@ -917,6 +795,23 @@ func (g *Game) openGameOverScreen() {
 	timeText := fmt.Sprintf("Time: %.1fs", g.score.duration)
 	statsFontSize := float32(30)
 
+	// Check for high score
+	isNewHighScore := IsHighScore(g.score.points, g.highScores)
+	if isNewHighScore {
+		newScore := HighScore{
+			Score:    g.score.points,
+			Duration: g.score.duration,
+			Date:     time.Now().Format("2006-01-02"),
+		}
+		g.highScores = UpdateHighScores(g.highScores, newScore)
+		SaveHighScores(g.highScores)
+	}
+
+	// Create high score text
+	highScoreText := "NEW HIGH SCORE!"
+	highScoreFontSize := float32(28)
+	highScoreSize := rl.MeasureTextEx(g.menu.font, highScoreText, highScoreFontSize, 1)
+
 	for {
 		mousePoint := rl.GetMousePosition()
 		// Handle button interaction
@@ -949,36 +844,172 @@ func (g *Game) openGameOverScreen() {
 			rl.Maroon,
 		)
 
-		// Draw score
 		scoreSize := rl.MeasureTextEx(g.menu.font, scoreText, statsFontSize, 1)
-		rl.DrawTextEx(
-			g.menu.font,
-			scoreText,
-			rl.Vector2{
-				X: float32(g.screenWidth)/2 - scoreSize.X/2,
-				Y: float32(g.screenHeight) * 0.4,
-			},
-			statsFontSize,
-			1,
-			rl.DarkGreen,
-		)
 
-		// Draw time
-		timeSize := rl.MeasureTextEx(g.menu.font, timeText, statsFontSize, 1)
-		rl.DrawTextEx(
-			g.menu.font,
-			timeText,
-			rl.Vector2{
-				X: float32(g.screenWidth)/2 - timeSize.X/2,
-				Y: float32(g.screenHeight)*0.4 + scoreSize.Y + buttonSpacing,
-			},
-			statsFontSize,
-			1,
-			rl.DarkGreen,
-		)
+		// Draw high score notification if applicable
+		if isNewHighScore {
+			rl.DrawTextEx(
+				g.menu.font,
+				highScoreText,
+				rl.Vector2{
+					X: float32(g.screenWidth)/2 - highScoreSize.X/2,
+					Y: float32(g.screenHeight) * 0.35,
+				},
+				highScoreFontSize,
+				1,
+				rl.Gold,
+			)
+			// Draw score
+			rl.DrawTextEx(
+				g.menu.font,
+				scoreText,
+				rl.Vector2{
+					X: float32(g.screenWidth)/2 - scoreSize.X/2,
+					Y: float32(g.screenHeight) * 0.45,
+				},
+				statsFontSize,
+				1,
+				rl.DarkGreen,
+			)
+			// Draw time
+			timeSize := rl.MeasureTextEx(g.menu.font, timeText, statsFontSize, 1)
+			rl.DrawTextEx(
+				g.menu.font,
+				timeText,
+				rl.Vector2{
+					X: float32(g.screenWidth)/2 - timeSize.X/2,
+					Y: float32(g.screenHeight)*0.45 + scoreSize.Y + buttonSpacing,
+				},
+				statsFontSize,
+				1,
+				rl.DarkGreen,
+			)
+		} else {
+			// Draw score
+			rl.DrawTextEx(
+				g.menu.font,
+				scoreText,
+				rl.Vector2{
+					X: float32(g.screenWidth)/2 - scoreSize.X/2,
+					Y: float32(g.screenHeight) * 0.40,
+				},
+				statsFontSize,
+				1,
+				rl.DarkGreen,
+			)
+
+			// Draw time
+			timeSize := rl.MeasureTextEx(g.menu.font, timeText, statsFontSize, 1)
+			rl.DrawTextEx(
+				g.menu.font,
+				timeText,
+				rl.Vector2{
+					X: float32(g.screenWidth)/2 - timeSize.X/2,
+					Y: float32(g.screenHeight)*0.40 + scoreSize.Y + buttonSpacing,
+				},
+				statsFontSize,
+				1,
+				rl.DarkGreen,
+			)
+		}
 
 		// Draw exit button
 		exitButton.Draw()
+		rl.EndDrawing()
+	}
+}
+
+// Add new method for high scores screen
+func (g *Game) openHighScoresScreen() {
+	buttonWidth := float32(200)
+	buttonHeight := float32(50)
+
+	backButton := NewButton(
+		float32(g.screenWidth)/2-buttonWidth/2,
+		float32(g.screenHeight)*0.8,
+		buttonWidth,
+		buttonHeight,
+		"Back",
+		30,
+		g.menu.font,
+	)
+
+	titleText := "HIGH SCORES"
+	titleFontSize := float32(60)
+	statsFontSize := float32(30)
+	titleSize := rl.MeasureTextEx(g.menu.font, titleText, titleFontSize, 1)
+
+	for {
+		if rl.IsKeyReleased(rl.KeyEscape) {
+			g.state = StateMainMenu
+			return
+		}
+
+		mousePoint := rl.GetMousePosition()
+
+		if backButton.IsHovered(mousePoint) {
+			backButton.color = rl.Gray
+			if g.menu.handleButtonClick() {
+				g.state = StateMainMenu
+				return
+			}
+		} else {
+			backButton.color = rl.LightGray
+		}
+
+		rl.BeginDrawing()
+		rl.ClearBackground(rl.RayWhite)
+
+		// Draw title
+		rl.DrawTextEx(
+			g.menu.font,
+			titleText,
+			rl.Vector2{
+				X: float32(g.screenWidth)/2 - titleSize.X/2,
+				Y: float32(g.screenHeight) * 0.1,
+			},
+			titleFontSize,
+			1,
+			rl.DarkGreen,
+		)
+
+		// Draw high scores
+		startY := float32(g.screenHeight) * 0.3
+		for i, score := range g.highScores {
+			scoreText := fmt.Sprintf("%d. Score: %d  Time: %.1fs  (%s)",
+				i+1, score.Score, score.Duration, score.Date)
+			scoreSize := rl.MeasureTextEx(g.menu.font, scoreText, statsFontSize, 1)
+			rl.DrawTextEx(
+				g.menu.font,
+				scoreText,
+				rl.Vector2{
+					X: float32(g.screenWidth)/2 - scoreSize.X/2,
+					Y: startY + float32(i)*statsFontSize*1.5,
+				},
+				statsFontSize,
+				1,
+				rl.DarkGray,
+			)
+		}
+
+		// Draw "No scores yet" if there are no high scores
+		if len(g.highScores) == 0 {
+			noScoresText := "No scores yet!"
+			textSize := rl.MeasureTextEx(g.menu.font, noScoresText, statsFontSize, 1)
+			rl.DrawTextEx(
+				g.menu.font,
+				noScoresText,
+				rl.Vector2{
+					X: float32(g.screenWidth)/2 - textSize.X/2,
+					Y: float32(g.screenHeight) * 0.4,
+				},
+				statsFontSize,
+				1,
+				rl.Gray,
+			)
+		}
+
+		backButton.Draw()
 		rl.EndDrawing()
 	}
 }
