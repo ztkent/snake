@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -16,42 +17,145 @@ const (
 	StateGameOver
 )
 
-// Game handles the game state and settings
-type Game struct {
-	state          GameState
-	volume         float32
-	screenWidth    int32
-	screenHeight   int32
-	running        bool
-	buttonReleased bool
+// Sprite represents a falling pixel element in the background
+type Sprite struct {
+	position rl.Vector2
+	speed    float32
+	size     float32
+	color    rl.Color
+}
+
+// TurnPoint represents a point where the snake changes direction
+type TurnPoint struct {
+	position  rl.Vector2
+	direction float32
+}
+
+// SnakeSegment represents a segment of the snake
+type SnakeSegment struct {
+	position  rl.Vector2
+	direction float32
+}
+
+// MenuState handles menu-specific UI elements and animations
+type MenuState struct {
+	sprites        []Sprite
+	snakePos       rl.Vector2
+	snakeDir       float32
+	snakeSpeed     float32
+	snakeSize      float32
+	snakeLength    int
+	snakeSegments  []SnakeSegment
+	turnPoints     []TurnPoint
 	font           rl.Font
+	buttonReleased bool
+	screenWidth    int32 // Add screen dimensions
+	screenHeight   int32
+}
+
+// Game handles core game state
+type Game struct {
+	state        GameState
+	volume       float32
+	screenWidth  int32
+	screenHeight int32
+	running      bool
+	menu         *MenuState
 }
 
 // NewGame creates and initializes a new game instance
 func NewGame(screenWidth, screenHeight int32) *Game {
-	game := &Game{
-		state:          StateMainMenu,
-		volume:         100,
-		screenWidth:    screenWidth,
-		screenHeight:   screenHeight,
-		running:        true,
+	menu := &MenuState{
+		sprites:        make([]Sprite, 50),
+		snakePos:       rl.Vector2{X: 0, Y: float32(screenHeight - 40)},
+		snakeDir:       1,
+		snakeSpeed:     200,
+		snakeSize:      10,
+		snakeLength:    5,
+		snakeSegments:  make([]SnakeSegment, 12),
+		turnPoints:     make([]TurnPoint, 0),
 		buttonReleased: true,
+		screenWidth:    screenWidth, // Initialize screen dimensions
+		screenHeight:   screenHeight,
 	}
 
-	// Load custom font
-	game.font = rl.LoadFont("assets/RetroGaming.ttf")
-	return game
+	// Initialize menu elements
+	for i := range menu.sprites {
+		menu.sprites[i] = newRandomSprite(screenWidth)
+	}
+
+	// Initialize snake segments with position and direction
+	for i := 0; i < menu.snakeLength; i++ {
+		menu.snakeSegments[i] = SnakeSegment{
+			position: rl.Vector2{
+				X: menu.snakePos.X - float32(i)*menu.snakeSize*1.2,
+				Y: menu.snakePos.Y,
+			},
+			direction: 1,
+		}
+	}
+
+	menu.font = rl.LoadFont("assets/RetroGaming.ttf")
+
+	return &Game{
+		state:        StateMainMenu,
+		volume:       100,
+		screenWidth:  screenWidth,
+		screenHeight: screenHeight,
+		running:      true,
+		menu:         menu,
+	}
+}
+
+// Create a new random sprite
+func newRandomSprite(screenWidth int32) Sprite {
+	return Sprite{
+		position: rl.Vector2{
+			X: float32(rl.GetRandomValue(0, screenWidth)),
+			Y: float32(rl.GetRandomValue(-100, 0)),
+		},
+		speed: float32(rl.GetRandomValue(100, 200)) / 100.0,
+		size:  float32(rl.GetRandomValue(2, 6)),
+		color: rl.Color{
+			R: uint8(rl.GetRandomValue(0, 100)),
+			G: uint8(rl.GetRandomValue(100, 255)),
+			B: uint8(rl.GetRandomValue(0, 100)),
+			A: uint8(rl.GetRandomValue(100, 200)),
+		},
+	}
+}
+
+// Update and draw background sprites
+func (m *MenuState) updateBackground() {
+	deltaTime := rl.GetFrameTime()
+
+	for i := range m.sprites {
+		// Update position
+		m.sprites[i].position.Y += m.sprites[i].speed * deltaTime * 100
+
+		// Reset sprite if it's out of screen
+		if m.sprites[i].position.Y > float32(m.screenHeight) {
+			m.sprites[i] = newRandomSprite(m.screenWidth)
+		}
+
+		// Draw sprite
+		rl.DrawRectangleV(
+			m.sprites[i].position,
+			rl.Vector2{X: m.sprites[i].size, Y: m.sprites[i].size},
+			m.sprites[i].color,
+		)
+	}
 }
 
 // Helper method to handle button clicks safely
-func (g *Game) handleButtonClick() bool {
+func (m *MenuState) handleButtonClick() bool {
 	if rl.IsMouseButtonDown(rl.MouseLeftButton) {
-		if g.buttonReleased {
-			g.buttonReleased = false
+		if m.buttonReleased {
+			m.buttonReleased = false
 			return true
 		}
 	} else {
-		g.buttonReleased = true
+		m.buttonReleased = true
 	}
 	return false
 }
@@ -121,7 +225,7 @@ func main() {
 	rl.SetTargetFPS(60)
 
 	game := NewGame(screenWidth, screenHeight)
-	defer rl.UnloadFont(game.font)
+	defer rl.UnloadFont(game.menu.font)
 	game.Run()
 }
 
@@ -139,7 +243,7 @@ func (g *Game) openMainMenu() bool {
 		buttonHeight,
 		"Start",
 		30,
-		g.font,
+		g.menu.font,
 	)
 	settingsButton := NewButton(
 		float32(g.screenWidth)/2-buttonWidth/2,
@@ -148,7 +252,7 @@ func (g *Game) openMainMenu() bool {
 		buttonHeight,
 		"Settings",
 		30,
-		g.font,
+		g.menu.font,
 	)
 	exitButton := NewButton(
 		float32(g.screenWidth)/2-buttonWidth/2,
@@ -157,22 +261,25 @@ func (g *Game) openMainMenu() bool {
 		buttonHeight,
 		"Exit",
 		30,
-		g.font,
+		g.menu.font,
 	)
 
 	// Add title configuration
 	titleText := "SNAKE!"
 	titleFontSize := float32(80)
-	titleSize := rl.MeasureTextEx(g.font, titleText, titleFontSize, 1)
+	titleSize := rl.MeasureTextEx(g.menu.font, titleText, titleFontSize, 1)
 	titleY := startY - titleSize.Y - buttonSpacing
 
 	for !rl.WindowShouldClose() {
+		// Update snake animation
+		g.menu.updateSnake()
+
 		mousePoint := rl.GetMousePosition()
 
 		// Update button states
 		if startButton.IsHovered(mousePoint) {
 			startButton.color = rl.Gray
-			if g.handleButtonClick() {
+			if g.menu.handleButtonClick() {
 				g.state = StateGame
 				return true
 			}
@@ -182,7 +289,7 @@ func (g *Game) openMainMenu() bool {
 
 		if settingsButton.IsHovered(mousePoint) {
 			settingsButton.color = rl.Gray
-			if g.handleButtonClick() {
+			if g.menu.handleButtonClick() {
 				g.state = StateSettings
 				return true
 			}
@@ -192,7 +299,7 @@ func (g *Game) openMainMenu() bool {
 
 		if exitButton.IsHovered(mousePoint) {
 			exitButton.color = rl.Gray
-			if g.handleButtonClick() {
+			if g.menu.handleButtonClick() {
 				return false
 			}
 		} else {
@@ -202,9 +309,12 @@ func (g *Game) openMainMenu() bool {
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.RayWhite)
 
+		// Draw background first
+		g.menu.updateBackground()
+
 		// Draw title with custom font
 		rl.DrawTextEx(
-			g.font,
+			g.menu.font,
 			titleText,
 			rl.Vector2{
 				X: float32(g.screenWidth)/2 - titleSize.X/2,
@@ -218,6 +328,9 @@ func (g *Game) openMainMenu() bool {
 		startButton.Draw()
 		settingsButton.Draw()
 		exitButton.Draw()
+
+		// Draw snake at the bottom
+		g.menu.drawSnake()
 
 		rl.EndDrawing()
 	}
@@ -240,7 +353,7 @@ func (g *Game) openSettingsMenu() {
 		buttonHeight,
 		volumeText,
 		30,
-		g.font,
+		g.menu.font,
 	)
 
 	backButton := NewButton(
@@ -250,7 +363,7 @@ func (g *Game) openSettingsMenu() {
 		buttonHeight,
 		"Back",
 		30,
-		g.font,
+		g.menu.font,
 	)
 
 	for {
@@ -290,7 +403,7 @@ func (g *Game) openSettingsMenu() {
 		// Handle back button
 		if backButton.IsHovered(mousePoint) {
 			backButton.color = rl.Gray
-			if g.handleButtonClick() {
+			if g.menu.handleButtonClick() {
 				g.state = StateMainMenu
 				return
 			}
@@ -307,9 +420,9 @@ func (g *Game) openSettingsMenu() {
 		// Draw instructions
 		instructionsText := "Use Left/Right arrows to adjust volume"
 		fontSize := float32(20)
-		textSize := rl.MeasureTextEx(g.font, instructionsText, fontSize, 1)
+		textSize := rl.MeasureTextEx(g.menu.font, instructionsText, fontSize, 1)
 		rl.DrawTextEx(
-			g.font,
+			g.menu.font,
 			instructionsText,
 			rl.Vector2{
 				X: float32(g.screenWidth)/2 - textSize.X/2,
@@ -337,4 +450,80 @@ func max(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+func (m *MenuState) updateSnake() {
+	deltaTime := rl.GetFrameTime()
+
+	// Update head position
+	m.snakePos.X += m.snakeSpeed * m.snakeDir * deltaTime
+
+	// Check for wall collisions
+	if m.snakePos.X > float32(m.screenWidth)-m.snakeSize {
+		m.snakePos.X = float32(m.screenWidth) - m.snakeSize
+		m.snakeDir = -1
+	} else if m.snakePos.X < 0 {
+		m.snakePos.X = 0
+		m.snakeDir = 1
+	}
+
+	// Update head segment
+	m.snakeSegments[0].position = m.snakePos
+	m.snakeSegments[0].direction = m.snakeDir
+
+	// Update body segments
+	spacing := m.snakeSize * 1.2
+	for i := 1; i < m.snakeLength; i++ {
+		prev := m.snakeSegments[i-1]
+		curr := &m.snakeSegments[i]
+
+		// Calculate distance to previous segment
+		dist := prev.position.X - curr.position.X
+		absDist := float32(math.Abs(float64(dist)))
+
+		// Update position based on current direction
+		curr.position.X += m.snakeSpeed * curr.direction * deltaTime
+
+		// Check if segment needs to turn
+		if (curr.direction > 0 && curr.position.X >= prev.position.X-spacing) ||
+			(curr.direction < 0 && curr.position.X <= prev.position.X+spacing) {
+			// Maintain spacing from previous segment
+			if curr.direction > 0 {
+				curr.position.X = prev.position.X - spacing
+			} else {
+				curr.position.X = prev.position.X + spacing
+			}
+
+			// Only change direction when properly spaced
+			if absDist <= spacing*1.1 {
+				curr.direction = prev.direction
+			}
+		}
+
+		curr.position.Y = m.snakePos.Y
+	}
+}
+
+func (m *MenuState) drawSnake() {
+	// Draw body segments first
+	for i := m.snakeLength - 1; i > 0; i-- {
+		segment := m.snakeSegments[i]
+		rl.DrawRectangleV(
+			segment.position,
+			rl.Vector2{X: m.snakeSize, Y: m.snakeSize},
+			rl.Green,
+		)
+	}
+
+	// Draw head
+	headColor := rl.DarkGreen
+	if m.snakeDir > 0 {
+		// Draw eyes on right side when moving right
+		rl.DrawRectangleV(m.snakePos, rl.Vector2{X: m.snakeSize, Y: m.snakeSize}, headColor)
+		rl.DrawCircleV(rl.Vector2{X: m.snakePos.X + m.snakeSize*0.7, Y: m.snakePos.Y + m.snakeSize*0.3}, 2, rl.White)
+	} else {
+		// Draw eyes on left side when moving left
+		rl.DrawRectangleV(m.snakePos, rl.Vector2{X: m.snakeSize, Y: m.snakeSize}, headColor)
+		rl.DrawCircleV(rl.Vector2{X: m.snakePos.X + m.snakeSize*0.3, Y: m.snakePos.Y + m.snakeSize*0.3}, 2, rl.White)
+	}
 }
