@@ -250,7 +250,7 @@ func (g *Game) StartGame() {
 
 		// Draw all food pieces
 		for _, food := range foods {
-			rl.DrawRectangleV(food.position, rl.Vector2{X: food.size, Y: food.size}, rl.Red)
+			rl.DrawRectangleV(food.position, rl.Vector2{X: food.size, Y: food.size}, rl.Gold)
 		}
 
 		// Draw snake
