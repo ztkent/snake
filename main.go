@@ -2,6 +2,8 @@ package main
 
 import (
 	rl "github.com/gen2brain/raylib-go/raylib"
+	"github.com/ztkent/snake/internal/audio"
+	"github.com/ztkent/snake/internal/highscores"
 )
 
 // GameState represents the current state of the game
@@ -18,13 +20,13 @@ const (
 
 // NewGame creates and initializes a new game instance
 func NewGame(screenWidth, screenHeight int32) *Game {
-	scores, err := LoadHighScores()
+	scores, err := highscores.LoadHighScores()
 	if err != nil {
-		scores = make([]HighScore, 0)
+		scores = make([]highscores.HighScore, 0)
 	}
 
-	audio := NewAudioManager()
-	audio.LoadResources()
+	am := audio.NewAudioManager()
+	am.LoadResources()
 
 	game := &Game{
 		state:        StateMainMenu,
@@ -34,7 +36,7 @@ func NewGame(screenWidth, screenHeight int32) *Game {
 		running:      true,
 		menu:         NewMenuState(screenWidth, screenHeight),
 		highScores:   scores,
-		audio:        audio,
+		audio:        am,
 	}
 	return game
 }

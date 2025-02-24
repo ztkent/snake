@@ -1,4 +1,4 @@
-package main
+package audio
 
 import (
 	"fmt"
@@ -7,13 +7,13 @@ import (
 )
 
 type AudioManager struct {
-	menuMusic    Music
-	gameMusic    Music
-	gameOverSFX  Sound
-	collectSFX   Sound
-	volume       float32
-	currentMusic *Music
-	isPlaying    bool // Add playing status
+	MenuMusic    Music
+	GameMusic    Music
+	GameOverSFX  Sound
+	CollectSFX   Sound
+	Volume       float32
+	CurrentMusic *Music
+	IsPlaying    bool // Add playing status
 }
 
 type Music struct {
@@ -29,7 +29,7 @@ type Sound struct {
 func NewAudioManager() *AudioManager {
 	rl.InitAudioDevice()
 	return &AudioManager{
-		volume: 1.0,
+		Volume: 1.0,
 	}
 }
 
@@ -38,10 +38,10 @@ func (am *AudioManager) LoadResources() {
 	menuStream := rl.LoadMusicStream("assets/mainmenu.mp3")
 	if !rl.IsMusicValid(menuStream) {
 		fmt.Println("Failed to load menu music")
-		am.menuMusic = Music{stream: menuStream, loaded: false}
+		am.MenuMusic = Music{stream: menuStream, loaded: false}
 	} else {
 		fmt.Println("Menu music loaded successfully")
-		am.menuMusic = Music{stream: menuStream, loaded: true}
+		am.MenuMusic = Music{stream: menuStream, loaded: true}
 
 	}
 
@@ -49,40 +49,40 @@ func (am *AudioManager) LoadResources() {
 	gameStream := rl.LoadMusicStream("assets/gamemusic.mp3")
 	if !rl.IsMusicValid(gameStream) {
 		fmt.Println("Failed to load game music")
-		am.gameMusic = Music{stream: gameStream, loaded: false}
+		am.GameMusic = Music{stream: gameStream, loaded: false}
 	} else {
 		fmt.Println("Game music loaded successfully")
-		am.gameMusic = Music{stream: gameStream, loaded: true}
+		am.GameMusic = Music{stream: gameStream, loaded: true}
 	}
 
 	// Load sound effects
 	gameOverSound := rl.LoadSound("assets/gameover.wav")
-	am.gameOverSFX = Sound{sound: gameOverSound, loaded: true}
+	am.GameOverSFX = Sound{sound: gameOverSound, loaded: true}
 
 	collectSound := rl.LoadSound("assets/nom.wav")
-	rl.SetSoundVolume(collectSound, am.volume*0.5)
-	am.collectSFX = Sound{sound: collectSound, loaded: true}
+	rl.SetSoundVolume(collectSound, am.Volume*0.5)
+	am.CollectSFX = Sound{sound: collectSound, loaded: true}
 
 	// Set initial properties
-	rl.SetMusicVolume(gameStream, am.volume)
+	rl.SetMusicVolume(gameStream, am.Volume)
 	rl.SetMusicPitch(gameStream, 1.0)
 }
 
 func (am *AudioManager) UnloadResources() {
 	// Unload music
-	if am.menuMusic.loaded {
-		rl.UnloadMusicStream(am.menuMusic.stream)
+	if am.MenuMusic.loaded {
+		rl.UnloadMusicStream(am.MenuMusic.stream)
 	}
-	if am.gameMusic.loaded {
-		rl.UnloadMusicStream(am.gameMusic.stream)
+	if am.GameMusic.loaded {
+		rl.UnloadMusicStream(am.GameMusic.stream)
 	}
 
 	// Unload sound effects
-	if am.gameOverSFX.loaded {
-		rl.UnloadSound(am.gameOverSFX.sound)
+	if am.GameOverSFX.loaded {
+		rl.UnloadSound(am.GameOverSFX.sound)
 	}
-	if am.collectSFX.loaded {
-		rl.UnloadSound(am.collectSFX.sound)
+	if am.CollectSFX.loaded {
+		rl.UnloadSound(am.CollectSFX.sound)
 	}
 
 	rl.CloseAudioDevice()
@@ -95,20 +95,20 @@ func (am *AudioManager) PlayMusic(music *Music) {
 	}
 
 	// Stop current music if playing
-	if am.currentMusic != nil && am.currentMusic.loaded {
+	if am.CurrentMusic != nil && am.CurrentMusic.loaded {
 		fmt.Println("Stopping current music")
-		rl.StopMusicStream(am.currentMusic.stream)
-		am.isPlaying = false
+		rl.StopMusicStream(am.CurrentMusic.stream)
+		am.IsPlaying = false
 	}
 
-	am.currentMusic = music
+	am.CurrentMusic = music
 	fmt.Printf("Playing new music (loaded: %v)\n", music.loaded)
 
 	if rl.IsMusicValid(music.stream) {
 		rl.SeekMusicStream(music.stream, 0.0)
 		rl.PlayMusicStream(music.stream)
-		rl.SetMusicVolume(music.stream, am.volume)
-		am.isPlaying = true
+		rl.SetMusicVolume(music.stream, am.Volume)
+		am.IsPlaying = true
 		fmt.Println("Music started successfully")
 	} else {
 		fmt.Println("Failed to play music - stream not ready")
@@ -116,17 +116,17 @@ func (am *AudioManager) PlayMusic(music *Music) {
 }
 
 func (am *AudioManager) UpdateMusic() {
-	if am.currentMusic == nil || !am.currentMusic.loaded {
+	if am.CurrentMusic == nil || !am.CurrentMusic.loaded {
 		return
 	}
 
-	if !rl.IsMusicStreamPlaying(am.currentMusic.stream) && am.isPlaying {
+	if !rl.IsMusicStreamPlaying(am.CurrentMusic.stream) && am.IsPlaying {
 		fmt.Println("Music ended, restarting...")
-		rl.SeekMusicStream(am.currentMusic.stream, 0.0)
-		rl.PlayMusicStream(am.currentMusic.stream)
+		rl.SeekMusicStream(am.CurrentMusic.stream, 0.0)
+		rl.PlayMusicStream(am.CurrentMusic.stream)
 	}
 
-	rl.UpdateMusicStream(am.currentMusic.stream)
+	rl.UpdateMusicStream(am.CurrentMusic.stream)
 }
 
 func (am *AudioManager) PlaySound(sound *Sound) {
@@ -136,10 +136,10 @@ func (am *AudioManager) PlaySound(sound *Sound) {
 }
 
 func (am *AudioManager) SetVolume(volume float32) {
-	am.volume = volume / 100.0
-	rl.SetMasterVolume(am.volume)
+	am.Volume = volume / 100.0
+	rl.SetMasterVolume(am.Volume)
 	// Also update current music volume if playing
-	if am.currentMusic != nil && am.currentMusic.loaded {
-		rl.SetMusicVolume(am.currentMusic.stream, am.volume)
+	if am.CurrentMusic != nil && am.CurrentMusic.loaded {
+		rl.SetMusicVolume(am.CurrentMusic.stream, am.Volume)
 	}
 }

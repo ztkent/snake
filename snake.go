@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+	"github.com/ztkent/snake/internal/audio"
+	"github.com/ztkent/snake/internal/highscores"
 )
 
 const (
@@ -37,8 +39,8 @@ type Game struct {
 	running      bool
 	menu         *MenuState
 	score        Score
-	highScores   []HighScore
-	audio        *AudioManager
+	highScores   []highscores.HighScore
+	audio        *audio.AudioManager
 }
 
 type Score struct {
@@ -94,7 +96,7 @@ type Score struct {
 func (g *Game) StartGame() {
 	// Start the game music
 	g.audio.SetVolume(g.volume)
-	g.audio.PlayMusic(&g.audio.gameMusic)
+	g.audio.PlayMusic(&g.audio.GameMusic)
 
 	// Initialize score
 	g.score = Score{
@@ -172,9 +174,9 @@ func (g *Game) StartGame() {
 
 			// Check self-collision
 			if g.checkSelfCollision(newHead, snake.segments) {
-				g.audio.PlaySound(&g.audio.gameOverSFX)
+				g.audio.PlaySound(&g.audio.GameOverSFX)
 				g.state = StateGameOver
-				g.audio.PlayMusic(&g.audio.menuMusic)
+				g.audio.PlayMusic(&g.audio.MenuMusic)
 				return
 			}
 
@@ -183,7 +185,7 @@ func (g *Game) StartGame() {
 			for i, food := range foods {
 				if g.checkFoodCollision(newHead, snake.size, food) {
 					g.score.points++
-					g.audio.PlaySound(&g.audio.collectSFX)
+					g.audio.PlaySound(&g.audio.CollectSFX)
 					snake.segments = append([]rl.Vector2{newHead}, snake.segments...)
 					eaten = i
 					break

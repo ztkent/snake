@@ -1,4 +1,4 @@
-package main
+package highscores
 
 import (
 	"encoding/csv"

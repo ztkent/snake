@@ -6,6 +6,7 @@ import (
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+	"github.com/ztkent/snake/internal/highscores"
 )
 
 // Sprite represents a falling pixel element in the background
@@ -83,7 +84,7 @@ func NewMenuState(screenWidth, screenHeight int32) *MenuState {
 func (g *Game) openMainMenu() bool {
 	// Start the menu music
 	g.audio.SetVolume(g.volume * .4)
-	g.audio.PlayMusic(&g.audio.menuMusic)
+	g.audio.PlayMusic(&g.audio.MenuMusic)
 
 	lastUpdateTime := float32(0)
 	buttonWidth := float32(200)
@@ -470,15 +471,15 @@ func (g *Game) openGameOverScreen() {
 	statsFontSize := float32(30)
 
 	// Check for high score
-	isNewHighScore := IsHighScore(g.score.points, g.highScores)
+	isNewHighScore := highscores.IsHighScore(g.score.points, g.highScores)
 	if isNewHighScore {
-		newScore := HighScore{
+		newScore := highscores.HighScore{
 			Score:    g.score.points,
 			Duration: g.score.duration,
 			Date:     time.Now().Format("2006-01-02"),
 		}
-		g.highScores = UpdateHighScores(g.highScores, newScore)
-		SaveHighScores(g.highScores)
+		g.highScores = highscores.UpdateHighScores(g.highScores, newScore)
+		highscores.SaveHighScores(g.highScores)
 	}
 
 	// Create high score text
