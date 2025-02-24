@@ -38,6 +38,7 @@ type Game struct {
 	menu         *MenuState
 	score        Score
 	highScores   []HighScore
+	audio        *AudioManager
 }
 
 type Score struct {
@@ -91,6 +92,10 @@ type Score struct {
 // - Player closes window (returns to main menu)
 // - Snake collides with itself (triggers game over screen)
 func (g *Game) StartGame() {
+	// Start the game music
+	g.audio.SetVolume(g.volume)
+	g.audio.PlayMusic(&g.audio.gameMusic)
+
 	// Initialize score
 	g.score = Score{
 		points:    0,
@@ -115,6 +120,13 @@ func (g *Game) StartGame() {
 	totalPauseTime := float32(0)
 
 	for {
+		// Update music at consistent intervals
+		currentTime := rl.GetTime()
+		deltaTime := float32(currentTime) - lastUpdateTime
+		if deltaTime >= 1.0/60.0 { // Update at 60Hz
+			g.audio.UpdateMusic()
+		}
+
 		if rl.IsKeyPressed(rl.KeyEscape) {
 			g.state = StatePaused
 			pauseStartTime = float32(rl.GetTime())
@@ -145,8 +157,8 @@ func (g *Game) StartGame() {
 			snake.direction = Direction{X: 1, Y: 0}
 		}
 
-		currentTime := rl.GetTime()
-		deltaTime := float32(currentTime) - lastUpdateTime
+		currentTime = rl.GetTime()
+		deltaTime = float32(currentTime) - lastUpdateTime
 
 		if deltaTime >= 1.0/15.0 { // 15 FPS lock
 			// Update snake position
@@ -160,7 +172,9 @@ func (g *Game) StartGame() {
 
 			// Check self-collision
 			if g.checkSelfCollision(newHead, snake.segments) {
+				g.audio.PlaySound(&g.audio.gameOverSFX)
 				g.state = StateGameOver
+				g.audio.PlayMusic(&g.audio.menuMusic)
 				return
 			}
 
@@ -169,6 +183,7 @@ func (g *Game) StartGame() {
 			for i, food := range foods {
 				if g.checkFoodCollision(newHead, snake.size, food) {
 					g.score.points++
+					g.audio.PlaySound(&g.audio.collectSFX)
 					snake.segments = append([]rl.Vector2{newHead}, snake.segments...)
 					eaten = i
 					break
@@ -238,7 +253,6 @@ func (g *Game) StartGame() {
 
 		// Draw snake
 		g.drawSnake(snake)
-
 		rl.EndDrawing()
 	}
 }

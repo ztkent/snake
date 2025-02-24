@@ -81,6 +81,11 @@ func NewMenuState(screenWidth, screenHeight int32) *MenuState {
 
 // openMainMenu displays the main menu interface with Start, Settings, and Exit buttons.
 func (g *Game) openMainMenu() bool {
+	// Start the menu music
+	g.audio.SetVolume(g.volume * .4)
+	g.audio.PlayMusic(&g.audio.menuMusic)
+
+	lastUpdateTime := float32(0)
 	buttonWidth := float32(200)
 	buttonHeight := float32(50)
 	buttonSpacing := float32(20)
@@ -133,6 +138,13 @@ func (g *Game) openMainMenu() bool {
 	titleY := startY - titleSize.Y - buttonSpacing
 
 	for !rl.WindowShouldClose() {
+		// Update music at consistent intervals
+		currentTime := rl.GetTime()
+		deltaTime := float32(currentTime) - lastUpdateTime
+		if deltaTime >= 1.0/60.0 { // Update at 60Hz
+			g.audio.UpdateMusic()
+		}
+
 		// Update snake animation
 		g.menu.updateMenuSnake()
 
@@ -257,6 +269,7 @@ func (g *Game) openSettingsMenu() {
 					vol = 0
 				}
 				g.volume = vol
+				g.audio.SetVolume(vol) // Update audio volume
 				volumeText = fmt.Sprintf("Volume: %0.f%%", g.volume)
 				volumeButton.text = volumeText
 			}
@@ -266,6 +279,7 @@ func (g *Game) openSettingsMenu() {
 					vol = 100
 				}
 				g.volume = vol
+				g.audio.SetVolume(vol) // Update audio volume
 				volumeText = fmt.Sprintf("Volume: %0.f%%", g.volume)
 				volumeButton.text = volumeText
 			}

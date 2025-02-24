@@ -22,7 +22,11 @@ func NewGame(screenWidth, screenHeight int32) *Game {
 	if err != nil {
 		scores = make([]HighScore, 0)
 	}
-	return &Game{
+
+	audio := NewAudioManager()
+	audio.LoadResources()
+
+	game := &Game{
 		state:        StateMainMenu,
 		volume:       100,
 		screenWidth:  screenWidth,
@@ -30,7 +34,9 @@ func NewGame(screenWidth, screenHeight int32) *Game {
 		running:      true,
 		menu:         NewMenuState(screenWidth, screenHeight),
 		highScores:   scores,
+		audio:        audio,
 	}
+	return game
 }
 
 // Run is the main game loop
@@ -60,6 +66,7 @@ func main() {
 	rl.SetTargetFPS(60)
 
 	game := NewGame(screenWidth, screenHeight)
+	defer game.audio.UnloadResources()
 	defer rl.UnloadFont(game.menu.font)
 	game.Run()
 }
