@@ -4,7 +4,7 @@ A simple snake game built with Go and raylib.
 
 ## Demo
 
-...
+https://github.com/user-attachments/assets/32167f91-c42a-44fd-8c5c-206aa092b0c3
 
 ## Features
 
