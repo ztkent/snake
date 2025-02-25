@@ -136,7 +136,7 @@ func (g *Game) openMainMenu() bool {
 	titleText := "SNAKE!"
 	titleFontSize := float32(80)
 	titleSize := rl.MeasureTextEx(g.menu.font, titleText, titleFontSize, 1)
-	titleY := startY - titleSize.Y - buttonSpacing
+	titleY := startY - titleSize.Y - buttonSpacing + 10
 
 	for !rl.WindowShouldClose() {
 		// Update music at consistent intervals

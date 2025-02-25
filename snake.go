@@ -41,6 +41,10 @@ type Food struct {
 	position rl.Vector2
 	size     float32
 }
+type Bomb struct {
+	position rl.Vector2
+	size     float32
+}
 
 // Game handles core game state
 type Game struct {
@@ -129,6 +133,7 @@ func (g *Game) StartGame() {
 	}
 
 	foods := make([]Food, 0)
+	bombs := make([]Bomb, 0)
 	lastUpdateTime := float32(0)
 	pauseStartTime := float32(0)
 	totalPauseTime := float32(0)
@@ -192,6 +197,16 @@ func (g *Game) StartGame() {
 				return
 			}
 
+			// Check bomb collision with all bombs
+			for _, bomb := range bombs {
+				if g.checkBombCollision(newHead, snake.size, bomb) {
+					g.audio.PlaySound(&g.audio.GameOverSFX)
+					g.state = StateGameOver
+					g.audio.PlayMusic(&g.audio.MenuMusic)
+					return
+				}
+			}
+
 			// Check food collision with all food pieces
 			eaten := -1
 			for i, food := range foods {
@@ -212,7 +227,7 @@ func (g *Game) StartGame() {
 			// Spawn new food if none exists
 			if len(foods) == 0 {
 				currentGameTime := float32(rl.GetTime()) - g.score.startTime - totalPauseTime
-				g.spawnFood(&foods, snake.segments, currentGameTime)
+				g.spawnFoodAndBombs(&foods, &bombs, snake.segments, currentGameTime)
 			} else {
 				// Move snake
 				snake.segments = append([]rl.Vector2{newHead}, snake.segments[:len(snake.segments)-1]...)
@@ -265,6 +280,11 @@ func (g *Game) StartGame() {
 			rl.DrawRectangleV(food.position, rl.Vector2{X: food.size, Y: food.size}, rl.Gold)
 		}
 
+		// Draw all bombs
+		for _, bomb := range bombs {
+			rl.DrawRectangleV(bomb.position, rl.Vector2{X: bomb.size, Y: bomb.size}, rl.Red)
+		}
+
 		// Draw snake
 		g.drawSnake(snake)
 		rl.EndDrawing()
@@ -301,6 +321,12 @@ func (g *Game) checkFoodCollision(head rl.Vector2, size float32, food Food) bool
 	)
 }
 
+func (g *Game) checkBombCollision(head rl.Vector2, size float32, bomb Bomb) bool {
+	return rl.CheckCollisionRecs(
+		rl.NewRectangle(head.X, head.Y, size, size),
+		rl.NewRectangle(bomb.position.X, bomb.position.Y, bomb.size, bomb.size),
+	)
+}
 func (g *Game) drawSnake(snake GameSnake) {
 	for i, segment := range snake.segments {
 		if i == 0 {
@@ -313,14 +339,19 @@ func (g *Game) drawSnake(snake GameSnake) {
 	}
 }
 
-func (g *Game) spawnFood(foods *[]Food, snakeSegments []rl.Vector2, currentGameTime float32) {
+func (g *Game) spawnFoodAndBombs(foods *[]Food, bombs *[]Bomb, snakeSegments []rl.Vector2, currentGameTime float32) {
 	gridWidth := g.screenWidth / int32(gridSize)
 	gridHeight := g.screenHeight / int32(gridSize)
 
-	// Calculate number of food pieces based on time (minimum 1)
-	intervals := int(currentGameTime/10) + 1
-	if intervals > 5 { // Cap maximum food pieces at 5
-		intervals = 5
+	// Calculate food and bomb counts
+	foodCount := int(currentGameTime/10) + 1
+	if foodCount > 5 {
+		foodCount = 5
+	}
+
+	bombCount := 0
+	if foodCount > 1 {
+		bombCount = foodCount / 2
 	}
 
 	// Create array to track occupied positions
@@ -330,12 +361,12 @@ func (g *Game) spawnFood(foods *[]Food, snakeSegments []rl.Vector2, currentGameT
 		occupied[key] = true
 	}
 
-	// Clear existing food
-	*foods = make([]Food, 0, intervals)
+	// Clear existing food and bombs
+	*foods = make([]Food, 0, foodCount)
+	*bombs = make([]Bomb, 0, bombCount)
 
-	// Try to spawn each piece of food
-	attempts := 0
-	for len(*foods) < intervals && attempts < 100 { // Limit attempts to prevent infinite loop
+	// Spawn food first
+	for len(*foods) < foodCount {
 		x := float32(rl.GetRandomValue(0, gridWidth-1)) * gridSize
 		y := float32(rl.GetRandomValue(0, gridHeight-1)) * gridSize
 
@@ -346,7 +377,33 @@ func (g *Game) spawnFood(foods *[]Food, snakeSegments []rl.Vector2, currentGameT
 				size:     gridSize,
 			})
 			occupied[key] = true
+
+			// Mark adjacent cells as occupied for bomb spacing
+			for dx := -1; dx <= 1; dx++ {
+				for dy := -1; dy <= 1; dy++ {
+					nx := int(x) + dx*int(gridSize)
+					ny := int(y) + dy*int(gridSize)
+					adjKey := fmt.Sprintf("%d,%d", nx, ny)
+					occupied[adjKey] = true
+				}
+			}
 		}
-		attempts++
+	}
+
+	// Then spawn bombs
+	if bombCount > 0 {
+		for len(*bombs) < bombCount {
+			x := float32(rl.GetRandomValue(0, gridWidth-1)) * gridSize
+			y := float32(rl.GetRandomValue(0, gridHeight-1)) * gridSize
+
+			key := fmt.Sprintf("%d,%d", int(x), int(y))
+			if !occupied[key] {
+				*bombs = append(*bombs, Bomb{
+					position: rl.Vector2{X: x, Y: y},
+					size:     gridSize,
+				})
+				occupied[key] = true
+			}
+		}
 	}
 }
