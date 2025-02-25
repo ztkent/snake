@@ -345,8 +345,8 @@ func (g *Game) spawnFoodAndBombs(foods *[]Food, bombs *[]Bomb, snakeSegments []r
 
 	// Calculate food and bomb counts
 	foodCount := int(currentGameTime/10) + 1
-	if foodCount > 5 {
-		foodCount = 5
+	if foodCount > 6 {
+		foodCount = 6
 	}
 
 	bombCount := 0

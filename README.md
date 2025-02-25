@@ -1,4 +1,4 @@
-# Snake Game
+# Snake v0
 
 A simple snake game built with Go and raylib.
 
