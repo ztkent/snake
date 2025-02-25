@@ -6,18 +6,6 @@ import (
 	"github.com/ztkent/snake/internal/highscores"
 )
 
-// GameState represents the current state of the game
-type GameState int
-
-const (
-	StateMainMenu GameState = iota
-	StateGame
-	StateSettings
-	StateGameOver
-	StatePaused
-	StateHighScores // Add new state
-)
-
 // NewGame creates and initializes a new game instance
 func NewGame(screenWidth, screenHeight int32) *Game {
 	scores, err := highscores.LoadHighScores()

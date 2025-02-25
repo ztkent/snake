@@ -8,6 +8,18 @@ import (
 	"github.com/ztkent/snake/internal/highscores"
 )
 
+// GameState represents the current state of the game
+type GameState int
+
+const (
+	StateMainMenu GameState = iota
+	StateGame
+	StateSettings
+	StateGameOver
+	StatePaused
+	StateHighScores // Add new state
+)
+
 const (
 	gridSize     = 20  // Size of each grid cell
 	initialSpeed = 200 // Pixels per second
@@ -291,24 +303,13 @@ func (g *Game) checkFoodCollision(head rl.Vector2, size float32, food Food) bool
 
 func (g *Game) drawSnake(snake GameSnake) {
 	for i, segment := range snake.segments {
-		color := rl.Green
 		if i == 0 {
-			color = rl.DarkGreen // Head color
-			// Draw eyes based on direction
-			eyeOffset := float32(0.3)
-			if snake.direction.X > 0 {
-				eyeOffset = 0.7
-			}
-			rl.DrawCircleV(
-				rl.Vector2{
-					X: segment.X + snake.size*eyeOffset,
-					Y: segment.Y + snake.size*0.3,
-				},
-				2,
-				rl.White,
-			)
+			// Draw head
+			rl.DrawRectangleV(segment, rl.Vector2{X: snake.size, Y: snake.size}, rl.DarkGreen)
+		} else {
+			// Draw body segments
+			rl.DrawRectangleV(segment, rl.Vector2{X: snake.size, Y: snake.size}, rl.Green)
 		}
-		rl.DrawRectangleV(segment, rl.Vector2{X: snake.size, Y: snake.size}, color)
 	}
 }
 
